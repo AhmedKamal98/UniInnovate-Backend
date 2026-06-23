@@ -27,7 +27,7 @@ export class UsersService {
       this.prisma.user.findMany({
         where,
         include: { roles: true },
-        skip: query.skip,
+        skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { createdAt: query.order },
       }),

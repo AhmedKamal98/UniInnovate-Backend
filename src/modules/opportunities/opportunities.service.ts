@@ -21,7 +21,7 @@ export class OpportunitiesService {
       this.prisma.opportunity.findMany({
         where,
         include: { challenge: { select: { id: true, title: true, companyId: true } } },
-        skip: query.skip,
+        skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { createdAt: query.order },
       }),

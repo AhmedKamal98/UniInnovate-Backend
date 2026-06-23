@@ -25,7 +25,7 @@ export class ChallengesService {
       this.prisma.challenge.findMany({
         where,
         include: { company: { select: { id: true, name: true } } },
-        skip: query.skip,
+        skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { createdAt: query.order },
       }),

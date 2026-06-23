@@ -22,7 +22,7 @@ export class ProjectsService {
       this.prisma.project.findMany({
         where,
         include: { company: { select: { id: true, name: true } }, mentor: { select: { id: true, userId: true } } },
-        skip: query.skip,
+        skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { createdAt: query.order },
       }),

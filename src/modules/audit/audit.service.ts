@@ -23,7 +23,7 @@ export class AuditService {
       this.prisma.auditLog.findMany({
         where,
         include: { actor: { select: { id: true, name: true, email: true } } },
-        skip: query.skip,
+        skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { createdAt: 'desc' },
       }),

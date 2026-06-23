@@ -33,7 +33,4 @@ export class PaginationDto {
   @IsString()
   search?: string;
 
-  get skip(): number {
-    return (this.page - 1) * this.limit;
-  }
 }

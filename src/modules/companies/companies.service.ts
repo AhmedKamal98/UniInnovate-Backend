@@ -21,7 +21,7 @@ export class CompaniesService {
     }
 
     const [data, total] = await Promise.all([
-      this.prisma.company.findMany({ where, skip: query.skip, take: query.limit, orderBy: { createdAt: query.order } }),
+      this.prisma.company.findMany({ where, skip: (query.page - 1) * query.limit, take: query.limit, orderBy: { createdAt: query.order } }),
       this.prisma.company.count({ where }),
     ]);
     return paginate(data, total, query.page, query.limit);

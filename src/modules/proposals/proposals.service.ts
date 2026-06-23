@@ -24,7 +24,7 @@ export class ProposalsService {
       this.prisma.proposal.findMany({
         where,
         include: { opportunity: { select: { id: true, title: true } } },
-        skip: query.skip,
+        skip: (query.page - 1) * query.limit,
         take: query.limit,
         orderBy: { createdAt: query.order },
       }),
