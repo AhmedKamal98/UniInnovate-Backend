@@ -6,6 +6,29 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('Seeding UniInnovate database...');
 
+  // Clear existing data in reverse dependency order
+  await prisma.timelineEvent.deleteMany();
+  await prisma.fileAttachment.deleteMany();
+  await prisma.auditLog.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.featureFlag.deleteMany();
+  await prisma.themeSettings.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.billingPlan.deleteMany();
+  await prisma.platformServiceStatus.deleteMany();
+  await prisma.legalRecord.deleteMany();
+  await prisma.project.deleteMany();
+  await prisma.proposal.deleteMany();
+  await prisma.mentorAssignment.deleteMany();
+  await prisma.mentor.deleteMany();
+  await prisma.opportunity.deleteMany();
+  await prisma.challenge.deleteMany();
+  await prisma.company.deleteMany();
+  await prisma.userRole.deleteMany();
+  await prisma.user.deleteMany();
+  await prisma.tenant.deleteMany();
+  console.log('Cleared existing data.');
+
   const hash = await bcrypt.hash('password123', 10);
 
   // ─── Tenants ──────────────────────────────────────────────────────────
@@ -15,18 +38,18 @@ async function main() {
     prisma.tenant.create({ data: { id: 'uni-nile-science', name: 'Nile Science and Research University', country: 'Egypt', city: 'Giza', status: 'PENDING', plan: 'STARTER', brandingColor: '#7c3aed' } }),
   ]);
 
-  // ─── Users ────────────────────────────────────────────────────────────
+  // ─── Users (without companyId first) ───────────────────────────────────
   const usersData = [
     { id: 'usr-super-001', name: 'Amina Hassan', email: 'admin@tto.edu', primaryRole: Role.SUPER_ADMIN, roles: [Role.SUPER_ADMIN], tenantId: null, companyId: null, department: null, title: 'Platform Super Admin', mfaEnabled: true },
     { id: 'usr-tto-001', name: 'Omar El-Sayed', email: 'tto@university.edu', primaryRole: Role.TTO, roles: [Role.TTO, Role.REVIEWER], tenantId: 'uni-cairo-tech', companyId: null, department: 'Technology Transfer Office', title: 'TTO Staff Lead', mfaEnabled: true },
     { id: 'usr-university-admin-001', name: 'Laila Mansour', email: 'university.admin@tto.edu', primaryRole: Role.UNIVERSITY_ADMIN, roles: [Role.UNIVERSITY_ADMIN, Role.TTO], tenantId: 'uni-cairo-tech', companyId: null, department: 'Innovation Affairs', title: 'University Innovation Admin', mfaEnabled: false },
-    { id: 'usr-company-001', name: 'Karim Nassar', email: 'company@tech.com', primaryRole: Role.COMPANY, roles: [Role.COMPANY], tenantId: null, companyId: 'co-nile-robotics', department: null, title: 'Industry Innovation Manager', mfaEnabled: true },
+    { id: 'usr-company-001', name: 'Karim Nassar', email: 'company@tech.com', primaryRole: Role.COMPANY, roles: [Role.COMPANY], tenantId: null, companyId: null, department: null, title: 'Industry Innovation Manager', mfaEnabled: true },
     { id: 'usr-student-001', name: 'Mariam Adel', email: 'student@university.edu', primaryRole: Role.STUDENT, roles: [Role.STUDENT], tenantId: 'uni-cairo-tech', companyId: null, department: 'Computer Engineering', title: 'Graduate Student', mfaEnabled: false },
     { id: 'usr-researcher-001', name: 'Dr. Youssef Samir', email: 'researcher@university.edu', primaryRole: Role.RESEARCHER, roles: [Role.RESEARCHER, Role.MENTOR], tenantId: 'uni-cairo-tech', companyId: null, department: 'Applied AI Lab', title: 'Principal Researcher', mfaEnabled: true },
     { id: 'usr-mentor-001', name: 'Nadine Farouk', email: 'mentor@university.edu', primaryRole: Role.MENTOR, roles: [Role.MENTOR], tenantId: 'uni-alex-innovation', companyId: null, department: 'Venture Studio', title: 'Startup Mentor', mfaEnabled: true },
     { id: 'usr-reviewer-001', name: 'Dr. Hany Fouad', email: 'reviewer@university.edu', primaryRole: Role.REVIEWER, roles: [Role.REVIEWER], tenantId: 'uni-alex-innovation', companyId: null, department: 'Mechanical Engineering', title: 'Technical Reviewer', mfaEnabled: false },
     { id: 'usr-legal-001', name: 'Salma Ibrahim', email: 'legal@university.edu', primaryRole: Role.LEGAL, roles: [Role.LEGAL], tenantId: 'uni-cairo-tech', companyId: null, department: 'Legal and IP Office', title: 'Legal/IP Officer', mfaEnabled: true },
-    { id: 'usr-company-002', name: 'Dina Maher', email: 'dina.maher@renewgrid.com', primaryRole: Role.COMPANY, roles: [Role.COMPANY], tenantId: null, companyId: 'co-renew-grid', department: null, title: 'R&D Partnerships Lead', mfaEnabled: true },
+    { id: 'usr-company-002', name: 'Dina Maher', email: 'dina.maher@renewgrid.com', primaryRole: Role.COMPANY, roles: [Role.COMPANY], tenantId: null, companyId: null, department: null, title: 'R&D Partnerships Lead', mfaEnabled: true },
   ];
 
   for (const u of usersData) {
@@ -57,6 +80,10 @@ async function main() {
     prisma.company.create({ data: { id: 'co-urbanflow', ownerUserId: 'usr-company-002', name: 'UrbanFlow Mobility', industry: 'Smart Cities', status: 'ACTIVE', engagementScore: 76, flagged: true } }),
   ]);
 
+  // Link company users to their companies
+  await prisma.user.update({ where: { id: 'usr-company-001' }, data: { companyId: 'co-nile-robotics' } });
+  await prisma.user.update({ where: { id: 'usr-company-002' }, data: { companyId: 'co-renew-grid' } });
+
   // ─── Challenges ───────────────────────────────────────────────────────
   await Promise.all([
     prisma.challenge.create({ data: { id: 'chg-2026-001', companyId: 'co-nile-robotics', assignedReviewerId: 'usr-reviewer-001', title: 'Computer vision quality inspection for low-light assembly lines', industry: 'Advanced Manufacturing', status: 'UNDER_REVIEW', priority: 'URGENT', budget: 4200000, applicants: 18, summary: 'Reduce false rejects in visual inspection stations.', submittedAt: new Date('2026-05-08') } }),
@@ -65,18 +92,18 @@ async function main() {
     prisma.challenge.create({ data: { id: 'chg-2026-005', companyId: 'co-nile-robotics', assignedReviewerId: 'usr-reviewer-001', title: 'Low-cost robotic gripper for fragile packaged foods', industry: 'Advanced Manufacturing', status: 'PUBLISHED', priority: 'HIGH', budget: 2600000, applicants: 31, summary: 'Compliant gripper reducing product damage.', submittedAt: new Date('2026-04-15') } }),
   ]);
 
+  // ─── Mentors (before opportunities, which reference them) ──────────────
+  await Promise.all([
+    prisma.mentor.create({ data: { id: 'mentor-001', userId: 'usr-researcher-001', expertise: ['Computer Vision', 'AI Productization'], workload: 72, rating: 4.8, assignedProjects: 4, available: true } }),
+    prisma.mentor.create({ data: { id: 'mentor-002', userId: 'usr-mentor-001', expertise: ['Energy Systems', 'Venture Validation'], workload: 54, rating: 4.6, assignedProjects: 3, available: true } }),
+    prisma.mentor.create({ data: { id: 'mentor-003', userId: 'usr-reviewer-001', expertise: ['Mechanical Design', 'Manufacturing'], workload: 88, rating: 4.7, assignedProjects: 5, available: false } }),
+  ]);
+
   // ─── Opportunities ────────────────────────────────────────────────────
   await Promise.all([
     prisma.opportunity.create({ data: { id: 'opp-2026-001', challengeId: 'chg-2026-001', mentorId: 'mentor-001', title: 'AI Vision System for Manufacturing Quality', status: 'DRAFT', requiredSkills: ['Computer Vision', 'Edge AI', 'Python'], deadline: new Date('2026-06-15'), applicants: 18, proposals: 7, ndaRequired: true, visibility: 'UNIVERSITY' } }),
     prisma.opportunity.create({ data: { id: 'opp-2026-002', challengeId: 'chg-2026-002', mentorId: 'mentor-002', title: 'Predictive Battery Health Research Sprint', status: 'PUBLISHED', requiredSkills: ['Energy Systems', 'Forecasting', 'IoT'], deadline: new Date('2026-06-01'), applicants: 24, proposals: 9, ndaRequired: false, visibility: 'PUBLIC' } }),
     prisma.opportunity.create({ data: { id: 'opp-2026-003', challengeId: 'chg-2026-005', mentorId: 'mentor-003', title: 'Soft Robotics Gripper Prototype', status: 'PUBLISHED', requiredSkills: ['Mechanical Design', 'Rapid Prototyping'], deadline: new Date('2026-05-29'), applicants: 31, proposals: 12, ndaRequired: true, visibility: 'PUBLIC' } }),
-  ]);
-
-  // ─── Mentors ──────────────────────────────────────────────────────────
-  await Promise.all([
-    prisma.mentor.create({ data: { id: 'mentor-001', userId: 'usr-researcher-001', expertise: ['Computer Vision', 'AI Productization'], workload: 72, rating: 4.8, assignedProjects: 4, available: true } }),
-    prisma.mentor.create({ data: { id: 'mentor-002', userId: 'usr-mentor-001', expertise: ['Energy Systems', 'Venture Validation'], workload: 54, rating: 4.6, assignedProjects: 3, available: true } }),
-    prisma.mentor.create({ data: { id: 'mentor-003', userId: 'usr-reviewer-001', expertise: ['Mechanical Design', 'Manufacturing'], workload: 88, rating: 4.7, assignedProjects: 5, available: false } }),
   ]);
 
   // ─── Proposals ────────────────────────────────────────────────────────
