@@ -1,0 +1,483 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────────────────────────
+
+enum Role {
+  SUPER_ADMIN    @map("super-admin")
+  UNIVERSITY_ADMIN @map("university-admin")
+  TTO            @map("tto")
+  COMPANY        @map("company")
+  STUDENT        @map("student")
+  RESEARCHER     @map("researcher")
+  MENTOR         @map("mentor")
+  REVIEWER       @map("reviewer")
+  LEGAL          @map("legal")
+}
+
+enum EntityStatus {
+  ACTIVE       @map("active")
+  INACTIVE     @map("inactive")
+  PENDING      @map("pending")
+  SUSPENDED    @map("suspended")
+  APPROVED     @map("approved")
+  REJECTED     @map("rejected")
+  DRAFT        @map("draft")
+  UNDER_REVIEW @map("under-review")
+  PUBLISHED    @map("published")
+  ARCHIVED     @map("archived")
+  ON_TRACK     @map("on-track")
+  AT_RISK      @map("at-risk")
+  DELAYED      @map("delayed")
+  COMPLETED    @map("completed")
+  SENT         @map("sent")
+  SIGNED       @map("signed")
+  UNSIGNED     @map("unsigned")
+  BLOCKED      @map("blocked")
+}
+
+enum Priority {
+  LOW    @map("low")
+  MEDIUM @map("medium")
+  HIGH   @map("high")
+  URGENT @map("urgent")
+}
+
+enum PlanTier {
+  STARTER    @map("starter")
+  GROWTH     @map("growth")
+  ENTERPRISE @map("enterprise")
+}
+
+enum Visibility {
+  PUBLIC     @map("public")
+  UNIVERSITY @map("university")
+  INVITED    @map("invited")
+}
+
+enum ProjectHealth {
+  ON_TRACK @map("on_track")
+  AT_RISK  @map("at_risk")
+  DELAYED  @map("delayed")
+}
+
+enum LegalType {
+  NDA
+  IP_OWNERSHIP
+  PATENT
+  VAULT_ACCESS
+  CONTRACT
+}
+
+enum Severity {
+  INFO     @map("info")
+  SUCCESS  @map("success")
+  WARNING  @map("warning")
+  CRITICAL @map("critical")
+}
+
+enum InvoiceStatus {
+  PAID    @map("paid")
+  PENDING @map("pending")
+  OVERDUE @map("overdue")
+}
+
+enum ServiceStatus {
+  OPERATIONAL @map("operational")
+  DEGRADED    @map("degraded")
+  INCIDENT    @map("incident")
+}
+
+// ─── Models ─────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id            String       @id @default(uuid())
+  name          String       @db.VarChar(255)
+  country       String       @db.VarChar(100)
+  city          String       @db.VarChar(100)
+  status        EntityStatus @default(PENDING)
+  plan          PlanTier     @default(STARTER)
+  brandingColor String?      @map("branding_color") @db.VarChar(7)
+  logoUrl       String?      @map("logo_url")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+
+  users          User[]
+  invoices       Invoice[]
+  themeSettings  ThemeSettings?
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+
+  @@map("tenant")
+}
+
+model User {
+  id           String       @id @default(uuid())
+  tenantId     String?      @map("tenant_id")
+  companyId    String?      @map("company_id")
+  name         String       @db.VarChar(255)
+  email        String       @unique @db.VarChar(255)
+  passwordHash String       @map("password_hash") @db.VarChar(255)
+  primaryRole  Role         @map("primary_role")
+  status       EntityStatus @default(PENDING)
+  avatarUrl    String?      @map("avatar_url")
+  department   String?      @db.VarChar(255)
+  title        String?      @db.VarChar(255)
+  mfaEnabled   Boolean      @default(false) @map("mfa_enabled")
+  lastActiveAt DateTime?    @map("last_active_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+
+  tenant  Tenant?  @relation(fields: [tenantId], references: [id])
+  company Company? @relation(fields: [companyId], references: [id])
+  roles   UserRole[]
+
+  mentor               Mentor?
+  ownedCompanies       Company[]          @relation("CompanyOwner")
+  assignedChallenges   Challenge[]        @relation("ChallengeReviewer")
+  legalRecords         LegalRecord[]      @relation("LegalOwner")
+  targetedNotifications Notification[]    @relation("NotificationTarget")
+  auditLogs            AuditLog[]
+  fileAttachments      FileAttachment[]
+  timelineEvents       TimelineEvent[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("user")
+}
+
+model UserRole {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  role   Role
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+  @@map("user_role")
+}
+
+model Company {
+  id              String       @id @default(uuid())
+  ownerUserId     String       @map("owner_user_id")
+  name            String       @db.VarChar(255)
+  industry        String       @db.VarChar(100)
+  status          EntityStatus @default(PENDING)
+  engagementScore Int          @default(0) @map("engagement_score")
+  flagged         Boolean      @default(false)
+  lastActivity    DateTime?    @map("last_activity")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  owner      User       @relation("CompanyOwner", fields: [ownerUserId], references: [id])
+  users      User[]
+  challenges Challenge[]
+  projects   Project[]
+
+  @@map("company")
+}
+
+model Challenge {
+  id                 String       @id @default(uuid())
+  companyId          String       @map("company_id")
+  assignedReviewerId String?      @map("assigned_reviewer_id")
+  title              String       @db.VarChar(500)
+  industry           String       @db.VarChar(100)
+  status             EntityStatus @default(DRAFT)
+  priority           Priority     @default(MEDIUM)
+  budget             Int          @default(0)
+  applicants         Int          @default(0)
+  summary            String
+  requestedInfo      String?      @map("requested_info")
+  submittedAt        DateTime?    @map("submitted_at")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+
+  company          Company  @relation(fields: [companyId], references: [id])
+  assignedReviewer User?    @relation("ChallengeReviewer", fields: [assignedReviewerId], references: [id])
+  opportunities    Opportunity[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("challenge")
+}
+
+model Opportunity {
+  id             String       @id @default(uuid())
+  challengeId    String       @map("challenge_id")
+  mentorId       String?      @map("mentor_id")
+  title          String       @db.VarChar(500)
+  status         EntityStatus @default(DRAFT)
+  requiredSkills String[]     @map("required_skills")
+  deadline       DateTime?
+  applicants     Int          @default(0)
+  proposals      Int          @default(0)
+  ndaRequired    Boolean      @default(false) @map("nda_required")
+  visibility     Visibility   @default(PUBLIC)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  challenge     Challenge  @relation(fields: [challengeId], references: [id])
+  mentor        Mentor?    @relation(fields: [mentorId], references: [id])
+  proposalList  Proposal[]
+
+  @@index([challengeId])
+  @@map("opportunity")
+}
+
+model Proposal {
+  id                        String       @id @default(uuid())
+  opportunityId             String       @map("opportunity_id")
+  universityId              String       @map("university_id")
+  title                     String       @db.VarChar(500)
+  teamName                  String       @map("team_name") @db.VarChar(255)
+  status                    EntityStatus @default(DRAFT)
+  innovationScore           Int          @default(0) @map("innovation_score")
+  feasibilityScore          Int          @default(0) @map("feasibility_score")
+  marketValueScore          Int          @default(0) @map("market_value_score")
+  budgetEstimate            Int          @default(0) @map("budget_estimate")
+  reviewerNotes             String?      @map("reviewer_notes")
+  companyValidationStatus   String?      @map("company_validation_status") @db.VarChar(20)
+  finalRecommendation       String?      @map("final_recommendation")
+  selectedWinner            Boolean      @default(false) @map("selected_winner")
+  submittedAt               DateTime?    @map("submitted_at")
+  createdAt                 DateTime     @default(now()) @map("created_at")
+  updatedAt                 DateTime     @updatedAt @map("updated_at")
+
+  opportunity Opportunity @relation(fields: [opportunityId], references: [id])
+  project     Project?
+
+  @@index([opportunityId])
+  @@map("proposal")
+}
+
+model Project {
+  id            String        @id @default(uuid())
+  proposalId    String        @unique @map("proposal_id")
+  opportunityId String?       @map("opportunity_id")
+  companyId     String        @map("company_id")
+  mentorId      String        @map("mentor_id")
+  title         String        @db.VarChar(500)
+  teamName      String?       @map("team_name") @db.VarChar(255)
+  status        EntityStatus  @default(PENDING)
+  health        ProjectHealth @default(ON_TRACK)
+  progress      Int           @default(0)
+  nextMilestone String?       @map("next_milestone") @db.VarChar(500)
+  dueDate       DateTime?     @map("due_date")
+  ndaStatus     EntityStatus  @default(UNSIGNED) @map("nda_status")
+  ipStatus      String?       @map("ip_status")
+  vaultReady    Boolean       @default(false) @map("vault_ready")
+  lastActivity  DateTime?     @map("last_activity")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  proposal           Proposal          @relation(fields: [proposalId], references: [id])
+  company            Company           @relation(fields: [companyId], references: [id])
+  mentor             Mentor            @relation(fields: [mentorId], references: [id])
+  legalRecords       LegalRecord[]
+  mentorAssignments  MentorAssignment[]
+
+  @@index([companyId])
+  @@index([proposalId])
+  @@map("project")
+}
+
+model Mentor {
+  id               String  @id @default(uuid())
+  userId           String  @unique @map("user_id")
+  expertise        String[]
+  workload         Int     @default(0)
+  rating           Float   @default(0) @db.DoublePrecision
+  assignedProjects Int     @default(0) @map("assigned_projects")
+  available        Boolean @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  user              User               @relation(fields: [userId], references: [id])
+  opportunities     Opportunity[]
+  projects          Project[]
+  mentorAssignments MentorAssignment[]
+
+  @@map("mentor")
+}
+
+model MentorAssignment {
+  id         String   @id @default(uuid())
+  mentorId   String   @map("mentor_id")
+  projectId  String   @map("project_id")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  mentor  Mentor  @relation(fields: [mentorId], references: [id])
+  project Project @relation(fields: [projectId], references: [id])
+
+  @@unique([mentorId, projectId])
+  @@map("mentor_assignment")
+}
+
+model LegalRecord {
+  id        String       @id @default(uuid())
+  projectId String       @map("project_id")
+  ownerId   String       @map("owner_id")
+  type      LegalType
+  status    EntityStatus @default(PENDING)
+  dueDate   DateTime?    @map("due_date")
+  notes     String?
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  project Project @relation(fields: [projectId], references: [id])
+  owner   User    @relation("LegalOwner", fields: [ownerId], references: [id])
+
+  @@index([projectId])
+  @@map("legal_record")
+}
+
+model Notification {
+  id           String    @id @default(uuid())
+  tenantId     String?   @map("tenant_id")
+  targetUserId String?   @map("target_user_id")
+  targetRole   Role?     @map("target_role")
+  title        String    @db.VarChar(255)
+  body         String
+  severity     Severity  @default(INFO)
+  read         Boolean   @default(false)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  tenant     Tenant? @relation(fields: [tenantId], references: [id])
+  targetUser User?   @relation("NotificationTarget", fields: [targetUserId], references: [id])
+
+  @@index([tenantId, targetRole])
+  @@map("notification")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  actorUserId String   @map("actor_user_id")
+  tenantId    String?  @map("tenant_id")
+  action      String   @db.VarChar(255)
+  module      String   @db.VarChar(100)
+  entity      String   @db.VarChar(255)
+  details     String?
+  ipAddress   String?  @map("ip_address") @db.VarChar(45)
+  device      String?  @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  actor  User    @relation(fields: [actorUserId], references: [id])
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([createdAt(sort: Desc)])
+  @@map("audit_log")
+}
+
+model BillingPlan {
+  id        String       @id @default(uuid())
+  name      String       @db.VarChar(50)
+  price     Int          @default(0)
+  status    EntityStatus @default(ACTIVE)
+  features  String[]
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  invoices Invoice[]
+
+  @@map("billing_plan")
+}
+
+model Invoice {
+  id         String        @id @default(uuid())
+  tenantId   String        @map("tenant_id")
+  planId     String        @map("plan_id")
+  amount     Int           @default(0)
+  status     InvoiceStatus @default(PENDING)
+  issuedAt   DateTime      @map("issued_at")
+  paidAt     DateTime?     @map("paid_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id])
+  plan   BillingPlan @relation(fields: [planId], references: [id])
+
+  @@map("invoice")
+}
+
+model PlatformServiceStatus {
+  id        String        @id @default(uuid())
+  name      String        @db.VarChar(100)
+  status    ServiceStatus @default(OPERATIONAL)
+  uptime    String        @db.VarChar(10)
+  latencyMs Int           @map("latency_ms")
+  errorRate Float         @map("error_rate") @db.DoublePrecision
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  @@map("platform_service_status")
+}
+
+model ThemeSettings {
+  id             String   @id @default(uuid())
+  tenantId       String   @unique @map("tenant_id")
+  mode           String   @default("system") @db.VarChar(10)
+  primaryColor   String   @default("#1d4ed8") @map("primary_color") @db.VarChar(7)
+  secondaryColor String   @default("#0f766e") @map("secondary_color") @db.VarChar(7)
+  accentColor    String   @default("#f5c542") @map("accent_color") @db.VarChar(7)
+  radius         Int      @default(12)
+  fontFamily     String   @default("Inter") @map("font_family") @db.VarChar(50)
+  sidebarStyle   String   @default("soft") @map("sidebar_style") @db.VarChar(10)
+  headerStyle    String   @default("soft") @map("header_style") @db.VarChar(10)
+  logoUrl        String?  @map("logo_url")
+  tenantName     String   @map("tenant_name") @db.VarChar(255)
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@map("theme_settings")
+}
+
+model FeatureFlag {
+  id        String   @id @default(uuid())
+  key       String   @unique @db.VarChar(100)
+  label     String   @db.VarChar(255)
+  enabled   Boolean  @default(false)
+  tenants   Int      @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("feature_flag")
+}
+
+model FileAttachment {
+  id         String   @id @default(uuid())
+  entityType String   @map("entity_type") @db.VarChar(50)
+  entityId   String   @map("entity_id")
+  uploadedBy String   @map("uploaded_by")
+  filename   String   @db.VarChar(255)
+  mimeType   String   @map("mime_type") @db.VarChar(100)
+  sizeBytes  BigInt   @map("size_bytes")
+  storageKey String   @map("storage_key")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  uploader User @relation(fields: [uploadedBy], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("file_attachment")
+}
+
+model TimelineEvent {
+  id              String       @id @default(uuid())
+  entityType      String       @map("entity_type") @db.VarChar(50)
+  entityId        String       @map("entity_id")
+  authorId        String       @map("author_id")
+  title           String       @db.VarChar(255)
+  description     String?
+  statusSnapshot  EntityStatus? @map("status_snapshot")
+  createdAt       DateTime     @default(now()) @map("created_at")
+
+  author User @relation(fields: [authorId], references: [id])
+
+  @@index([entityType, entityId])
+  @@map("timeline_event")
+}
